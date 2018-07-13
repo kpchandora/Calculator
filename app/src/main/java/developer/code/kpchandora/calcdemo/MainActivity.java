@@ -1,10 +1,17 @@
 package developer.code.kpchandora.calcdemo;
 
+import android.content.ContentValues;
+import android.content.Intent;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
+import android.view.Window;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -66,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int OPERATION_MUL = 2;
     private static final int OPERATION_DIV = 3;
     private boolean containsDot;
+    private boolean isCalculated;
     private ArrayList<Integer> operationList;
 
     @Override
@@ -75,9 +83,23 @@ public class MainActivity extends AppCompatActivity {
         ButterKnife.bind(this);
         result = 0;
         containsDot = false;
+        isCalculated = false;
         builder = new StringBuilder();
         operationBuilder = new StringBuilder();
         operationList = new ArrayList<>();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        startActivity(new Intent(MainActivity.this, ResultActivity.class));
+        return super.onOptionsItemSelected(item);
     }
 
     public void onClick(View view) {
@@ -177,7 +199,14 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case R.id.button_equals:
                 double result = doCalculation();
+//                double result = evaluatePostfix(infixToPostfix(builder.toString()));
                 resultTextView.setText(result + "");
+                if (result != 0 || !builder.toString().equals("")) {
+                    insertData(result);
+                }
+                operationList.clear();
+                operationBuilder.setLength(0);
+                builder.setLength(0);
                 return;
             case R.id.button_clear:
                 builder.setLength(0);
@@ -185,15 +214,8 @@ public class MainActivity extends AppCompatActivity {
                 operationBuilder.setLength(0);
                 text = "clear";
                 containsDot = false;
+                isCalculated = true;
                 break;
-//            case R.id.button_delete:
-//                if (builderCount > 0) {
-//                    builder.deleteCharAt(builder.length() - 1);
-//                }
-//                if (builder.length() == 0) {
-//                    text = "clear";
-//                }
-//                break;
         }
 
         if (builderCount < 10) {
@@ -223,6 +245,20 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void insertData(double result) {
+        DbHelper helper = new DbHelper(this);
+        SQLiteDatabase db = helper.getWritableDatabase();
+
+        ContentValues contentValues = new ContentValues();
+        contentValues.put(DbUtils.OPERATION_COLUMN, builder.toString());
+        contentValues.put(DbUtils.MAIN_RESULTS_COLUMN, result);
+        contentValues.put(DbUtils.DATE_COLUMN, System.currentTimeMillis());
+
+        long rowId = db.insert(DbUtils.TABLE_NAME, null, contentValues);
+        Log.i(TAG, "insertData: " + rowId);
+
+    }
+
     private void removeLastChar(String s) {
         int count = builder.length();
         if (count > 0) {
@@ -250,9 +286,21 @@ public class MainActivity extends AppCompatActivity {
 
         String[] numberStrings = operationBuilder.toString().split(":");
 
+        if (numberStrings.length < 1 || numberStrings[0].equals("")) {
+            return 0;
+        }
+
+        int l = numberStrings.length;
+        Log.i(TAG, "doCalculation: " + l);
+
         double result = 0;
         int tag = 0;
         for (int i = 0; i < numberStrings.length; i++) {
+
+            if (i == 0) {
+                result = Double.parseDouble(numberStrings[0]);
+                continue;
+            }
 
             double num = Double.parseDouble(numberStrings[i]);
 
@@ -266,13 +314,13 @@ public class MainActivity extends AppCompatActivity {
                     result += num;
                     break;
                 case OPERATION_SUB:
-                    result = num - result;
+                    result = result - num;
                     break;
                 case OPERATION_MUL:
-
+                    result = result * num;
                     break;
                 case OPERATION_DIV:
-
+                    result = result / num;
                     break;
             }
 
